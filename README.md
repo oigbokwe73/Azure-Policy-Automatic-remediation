@@ -1,5 +1,92 @@
 # Azure-Policy-Automatic-remediation
 
+Great question 👍. In **Logic Apps**, you have a few ways to display or pass outputs depending on what you want to see:
+
+---
+
+## 1. **Use a `Response` action (for HTTP-triggered apps)**
+
+If your Logic App starts with an **HTTP trigger**, you can add a **Response** action at the end to return values (JSON, text, etc.) back to the caller (Postman, cURL, API, another app).
+
+Example:
+
+```json
+{
+  "type": "Response",
+  "inputs": {
+    "statusCode": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": {
+      "message": "Remediation workflow complete",
+      "nonCompliantCount": "@outputs('Compose_NonCompliant_Count')",
+      "remediationResult": "@actions('Create_Remediation_Subscription')?['outputs']"
+    }
+  }
+}
+```
+
+👉 This way, when you call the Logic App URL, you’ll see the JSON response with your remediation results.
+
+---
+
+## 2. **Use `Compose` actions**
+
+* `Compose` is handy for showing intermediate results (counts, JSON, or text).
+* These show up in the **Run History** in the portal.
+* You already have `Compose_NonCompliant_Count` and `Compose_Skip_Message` in the workflow I shared — those values will be visible in the run logs.
+
+---
+
+## 3. **Send outputs elsewhere**
+
+You can add actions like:
+
+* **Send an email** (Office 365 Outlook, SMTP, etc.)
+* **Post a message to Teams / Slack**
+* **Insert a row in a SQL table**
+* **Write to Blob Storage / Log Analytics**
+
+Example (send an email with results):
+
+```json
+{
+  "type": "ApiConnection",
+  "inputs": {
+    "host": {
+      "connection": { "name": "@parameters('$connections')['office365']['connectionId']" }
+    },
+    "method": "post",
+    "path": "/v2/Mail",
+    "body": {
+      "To": "ops-team@contoso.com",
+      "Subject": "Azure Policy Remediation Results",
+      "Body": "Non-compliant count: @{outputs('Compose_NonCompliant_Count')}"
+    }
+  }
+}
+```
+
+---
+
+## 4. **Check Run History**
+
+Even without a Response action:
+
+* Go to your Logic App in the Azure Portal.
+* Open **Runs history** → select a run → expand actions → see inputs/outputs.
+* This is often how you debug and inspect outputs like compliance counts or remediation API responses.
+
+---
+
+✅ **Best practice**:
+If you expect to trigger the Logic App manually or from another app → use a **Response** action.
+If you just want to monitor → rely on **Compose** and the **Run History**, or push results to monitoring (Log Analytics, Storage, etc.).
+
+---
+
+Would you like me to **add a `Response` action** to the workflow I gave you so it automatically returns the remediation outcome to Postman/cURL when you test it?
+
+
 
 Here’s a **Logic App (Consumption) Code View** workflow that:
 
