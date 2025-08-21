@@ -203,13 +203,55 @@ Either set the top-level parameter `defaultScope` to `resourceGroup` in Code Vie
 4. On success you’ll get `201 Created`/`200 OK` and the remediation object in the action output; you can also see it under **Policy > Remediation** in the portal. ([Microsoft Learn][4])
 
 ---
+Here’s a simple **sample JSON payload** you can post to your Logic App’s HTTP trigger to create a remediation task:
+
+### Example – subscription scope
+
+```json
+{
+  "remediationName": "enable-diagnostics-remediation",
+  "policyAssignmentId": "/subscriptions/11111111-2222-3333-4444-555555555555/providers/Microsoft.Authorization/policyAssignments/enable-diags-assignment",
+  "resourceDiscoveryMode": "ReEvaluateCompliance",
+  "locations": [ "eastus", "westus" ],
+  "resourceCount": 50,
+  "parallelDeployments": 3,
+  "failureThresholdPercent": 5
+}
+```
+
+### Example – resource group scope
+
+```json
+{
+  "remediationName": "rg-remediation-task",
+  "policyAssignmentId": "/subscriptions/11111111-2222-3333-4444-555555555555/resourceGroups/MyResourceGroup/providers/Microsoft.Authorization/policyAssignments/storage-policy-assignment",
+  "resourceGroupName": "MyResourceGroup",
+  "policyDefinitionReferenceId": "8c8fa9e4",
+  "resourceDiscoveryMode": "ExistingNonCompliant"
+}
+```
+
+---
+
+🔑 **Notes:**
+
+* Replace the GUID with your actual subscription ID.
+* `remediationName` can be any unique string.
+* `policyAssignmentId` must point to the **policy assignment** you want to remediate.
+* `policyDefinitionReferenceId` is required if the assignment is an **initiative** and you want to remediate a single policy inside it.
+* `resourceDiscoveryMode`:
+
+  * `ExistingNonCompliant` = only remediate currently flagged resources.
+  * `ReEvaluateCompliance` = re-check compliance and then remediate.
+
+Do you want me to also give you a **ready-to-run `curl` example** that calls your Logic App trigger URL with one of these payloads, so you can test it immediately?
+
 
 ## Extras & tuning
 
 * Use `locations` to restrict remediation to certain regions; `parallelDeployments`, `resourceCount`, and `failureThreshold.percentage` let you tune pace and stop conditions. ([Microsoft Learn][4])
 * You can also target **management group** or **individual resource** scopes with the analogous REST paths if needed. ([Microsoft Learn][7])
 
-If you want this as **Bicep/ARM** to deploy a Logic App with the definition embedded (or a **Standard** Logic App version), say the word and I’ll generate it.
 
 [1]: https://learn.microsoft.com/en-us/azure/governance/policy/overview?utm_source=chatgpt.com "Overview of Azure Policy"
 [2]: https://www.azadvertizer.net/azrolesadvertizer/36243c78-bf99-498c-9df9-86d9f8d28608.html?utm_source=chatgpt.com "Resource Policy Contributor - 36243c78-bf99-498c-9df9- ..."
