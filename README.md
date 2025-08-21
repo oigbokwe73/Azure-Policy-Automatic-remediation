@@ -1,5 +1,241 @@
 # Azure-Policy-Automatic-remediation
 
+
+Here’s a **Logic App (Consumption) Code View** workflow that:
+
+1. Accepts a POST with your `policyAssignmentId` and `remediationName`
+2. Calls **Policy Insights – policyStates/latest/summarize** to get the non-compliant count
+3. **If count > 0**, creates a remediation (subscription scope by default, easy toggle for RG)
+
+---
+
+### Logic App — Code View JSON
+
+```json
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/schemas/2016-06-01/workflows.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "subscriptionId": {
+        "type": "string",
+        "defaultValue": "<SUBSCRIPTION-ID>"
+      },
+      "defaultScope": {
+        "type": "string",
+        "defaultValue": "subscription",
+        "metadata": { "description": "Use 'subscription' or 'resourceGroup'." }
+      },
+      "policyApiVersion": {
+        "type": "string",
+        "defaultValue": "2022-09-01"
+      },
+      "remediationApiVersion": {
+        "type": "string",
+        "defaultValue": "2021-10-01"
+      }
+    },
+    "triggers": {
+      "http_in": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "required": [ "remediationName", "policyAssignmentId" ],
+            "properties": {
+              "remediationName": { "type": "string" },
+              "policyAssignmentId": { "type": "string" },
+              "resourceGroupName": { "type": "string", "description": "Required when defaultScope = resourceGroup" },
+              "policyDefinitionReferenceId": { "type": "string" },
+              "resourceDiscoveryMode": {
+                "type": "string",
+                "enum": [ "ExistingNonCompliant", "ReEvaluateCompliance" ],
+                "default": "ExistingNonCompliant"
+              },
+              "locations": { "type": "array", "items": { "type": "string" } },
+              "resourceCount": { "type": "integer" },
+              "parallelDeployments": { "type": "integer" },
+              "failureThresholdPercent": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Summarize_NonCompliance": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{concat('https://management.azure.com/subscriptions/', parameters('subscriptionId'), '/providers/Microsoft.PolicyInsights/policyStates/latest/summarize?api-version=', parameters('policyApiVersion'))}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "filter": "@{concat(\"PolicyAssignmentId eq '\", triggerBody()?['policyAssignmentId'], \"'\")}"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://management.azure.com"
+          }
+        }
+      },
+
+      "Parse_Summary": {
+        "type": "ParseJson",
+        "runAfter": { "Summarize_NonCompliance": [ "Succeeded" ] },
+        "inputs": {
+          "content": "@body('Summarize_NonCompliance')",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "nonCompliantResources": { "type": "integer" },
+                          "compliantResources": { "type": "integer" }
+                        },
+                        "required": [ "nonCompliantResources" ]
+                      }
+                    }
+                  },
+                  "required": [ "results" ]
+                }
+              }
+            },
+            "required": [ "value" ]
+          }
+        }
+      },
+
+      "Compose_NonCompliant_Count": {
+        "type": "Compose",
+        "runAfter": { "Parse_Summary": [ "Succeeded" ] },
+        "inputs": "@coalesce(first(first(body('Parse_Summary')?['value'])?['results'])?['nonCompliantResources'], 0)"
+      },
+
+      "Condition_Create_Remediation": {
+        "type": "If",
+        "runAfter": { "Compose_NonCompliant_Count": [ "Succeeded" ] },
+        "expression": {
+          "greater": [
+            "@outputs('Compose_NonCompliant_Count')",
+            0
+          ]
+        },
+        "actions": {
+          "Compose_RemediationBody": {
+            "type": "Compose",
+            "inputs": {
+              "properties": {
+                "policyAssignmentId": "@triggerBody()?['policyAssignmentId']",
+                "policyDefinitionReferenceId": "@coalesce(triggerBody()?['policyDefinitionReferenceId'], null)",
+                "resourceDiscoveryMode": "@coalesce(triggerBody()?['resourceDiscoveryMode'], 'ExistingNonCompliant')",
+                "filters": {
+                  "locations": "@coalesce(triggerBody()?['locations'], null)"
+                },
+                "resourceCount": "@coalesce(triggerBody()?['resourceCount'], null)",
+                "parallelDeployments": "@coalesce(triggerBody()?['parallelDeployments'], null)",
+                "failureThreshold": {
+                  "percentage": "@coalesce(triggerBody()?['failureThresholdPercent'], null)"
+                }
+              }
+            }
+          },
+          "Create_Remediation_Subscription": {
+            "type": "Http",
+            "runAfter": { "Compose_RemediationBody": [ "Succeeded" ] },
+            "conditions": [
+              {
+                "expression": {
+                  "and": [
+                    { "equals": [ "@parameters('defaultScope')", "subscription" ] }
+                  ]
+                }
+              }
+            ],
+            "inputs": {
+              "method": "PUT",
+              "uri": "@{concat('https://management.azure.com/subscriptions/', parameters('subscriptionId'), '/providers/Microsoft.PolicyInsights/remediations/', encodeURIComponent(triggerBody()?['remediationName']), '?api-version=', parameters('remediationApiVersion'))}",
+              "headers": { "Content-Type": "application/json" },
+              "body": "@{outputs('Compose_RemediationBody')}",
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://management.azure.com"
+              }
+            }
+          },
+          "Create_Remediation_ResourceGroup": {
+            "type": "Http",
+            "runAfter": { "Create_Remediation_Subscription": [ "Skipped" ] },
+            "conditions": [
+              {
+                "expression": {
+                  "and": [
+                    { "equals": [ "@parameters('defaultScope')", "resourceGroup" ] }
+                  ]
+                }
+              }
+            ],
+            "inputs": {
+              "method": "PUT",
+              "uri": "@{concat('https://management.azure.com/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', encodeURIComponent(triggerBody()?['resourceGroupName']), '/providers/Microsoft.PolicyInsights/remediations/', encodeURIComponent(triggerBody()?['remediationName']), '?api-version=', parameters('remediationApiVersion'))}",
+              "headers": { "Content-Type": "application/json" },
+              "body": "@{outputs('Compose_RemediationBody')}",
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://management.azure.com"
+              }
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Compose_Skip_Message": {
+              "type": "Compose",
+              "inputs": {
+                "message": "No non-compliant resources found for the supplied policyAssignmentId. Remediation not created.",
+                "nonCompliantCount": "@outputs('Compose_NonCompliant_Count')"
+              }
+            }
+          }
+        }
+      }
+    },
+    "outputs": {
+      "result": {
+        "type": "Object",
+        "value": {
+          "nonCompliantCount": "@outputs('Compose_NonCompliant_Count')",
+          "subscriptionCall": "@actions('Create_Remediation_Subscription')?['outputs']",
+          "resourceGroupCall": "@actions('Create_Remediation_ResourceGroup')?['outputs']"
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+### How to use
+
+1. **Enable Managed Identity** on the Logic App.
+2. Grant it **Resource Policy Contributor** at the scope where you’ll create remediations (subscription or RG).
+3. Set `subscriptionId` in Parameters (Code View), and optionally set `defaultScope` to `resourceGroup`.
+4. POST one of your earlier payloads (remediation name + policy assignment ID, etc.).
+5. The workflow will summarize compliance, then **only create a remediation if the non-compliant count > 0**. Otherwise it returns a skip message with the count.
+
+If you’d like, I can also provide a **Standard (single-tenant) Logic App** version or an **ARM/Bicep template** that deploys this workflow end-to-end.
+
 Here’s a ready-to-paste **Logic App (Consumption) “Code View”** workflow that creates an **Azure Policy remediation task** via the Azure Resource Manager REST API using the Logic App’s **managed identity**.
 
 It exposes an HTTP trigger so you can post a payload with your `policyAssignmentId`, `remediationName`, and optional tuning knobs (locations filter, discovery mode, parallelism, etc.). It includes two actions so you can target either **subscription scope** (default) or **resource group scope** with a simple switch.
