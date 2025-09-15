@@ -1,5 +1,198 @@
 # Azure-Policy-Automatic-remediation
 
+
+Here's a complete **Logic App Designer JSON definition** that:
+
+1. Runs a **Kusto query** against **Log Analytics**
+2. Converts the results to **CSV**
+3. Stores the CSV in **Azure Blob Storage**
+4. Sends an **email with the CSV attached**
+
+---
+
+## ✅ Logic App Designer JSON
+
+```json
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2019-05-01/workflowDefinition.json#",
+    "actions": {
+      "Run_Query_and_List_Results": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/v1/workspaces/<workspace-id>/query",
+          "queries": {
+            "query": "Heartbeat | where TimeGenerated > ago(1d) | project TimeGenerated, Computer, OSType"
+          }
+        },
+        "runAfter": {}
+      },
+      "Initialize_CSV": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "csvOutput",
+              "type": "String",
+              "value": "TimeGenerated,Computer,OSType\n"
+            }
+          ]
+        },
+        "runAfter": {
+          "Run_Query_and_List_Results": ["Succeeded"]
+        }
+      },
+      "For_Each_Row": {
+        "type": "Foreach",
+        "foreach": "@body('Run_Query_and_List_Results')?['tables']?[0]?['rows']",
+        "actions": {
+          "Append_Row_to_CSV": {
+            "type": "AppendToStringVariable",
+            "inputs": {
+              "name": "csvOutput",
+              "value": "@{items('For_Each_Row')[0]},@{items('For_Each_Row')[1]},@{items('For_Each_Row')[2]}\n"
+            },
+            "runAfter": {}
+          }
+        },
+        "runAfter": {
+          "Initialize_CSV": ["Succeeded"]
+        }
+      },
+      "Create_Blob": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azureblob']['connectionId']"
+            }
+          },
+          "method": "put",
+          "path": "/v2/datasets/default/files",
+          "queries": {
+            "folderPath": "reports",
+            "name": "report-@{utcNow('yyyy-MM-dd')}.csv"
+          },
+          "body": "@variables('csvOutput')"
+        },
+        "runAfter": {
+          "For_Each_Row": ["Succeeded"]
+        }
+      },
+      "Get_Blob_Content": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azureblob']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/v2/datasets/default/files/content",
+          "queries": {
+            "path": "reports/report-@{utcNow('yyyy-MM-dd')}.csv"
+          }
+        },
+        "runAfter": {
+          "Create_Blob": ["Succeeded"]
+        }
+      },
+      "Send_Email_with_CSV": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['office365']['connectionId']"
+            }
+          },
+          "method": "post",
+          "path": "/v2/Mail",
+          "body": {
+            "To": ["you@example.com"],
+            "Subject": "Daily Log Analytics Report CSV",
+            "Body": "Attached is the latest report from Log Analytics.",
+            "Attachments": [
+              {
+                "Name": "report.csv",
+                "ContentBytes": "@base64(body('Get_Blob_Content'))"
+              }
+            ]
+          }
+        },
+        "runAfter": {
+          "Get_Blob_Content": ["Succeeded"]
+        }
+      }
+    },
+    "triggers": {
+      "Recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Day",
+          "interval": 1
+        }
+      }
+    },
+    "contentVersion": "1.0.0.0",
+    "outputs": {}
+  },
+  "parameters": {
+    "$connections": {
+      "value": {
+        "azuremonitorlogs": {
+          "connectionId": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Web/connections/azuremonitorlogs",
+          "connectionName": "azuremonitorlogs",
+          "id": "/subscriptions/<subscription-id>/providers/Microsoft.Web/locations/<region>/managedApis/azuremonitorlogs"
+        },
+        "azureblob": {
+          "connectionId": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Web/connections/azureblob",
+          "connectionName": "azureblob",
+          "id": "/subscriptions/<subscription-id>/providers/Microsoft.Web/locations/<region>/managedApis/azureblob"
+        },
+        "office365": {
+          "connectionId": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Web/connections/office365",
+          "connectionName": "office365",
+          "id": "/subscriptions/<subscription-id>/providers/Microsoft.Web/locations/<region>/managedApis/office365"
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## 🛠️ What You Need to Change
+
+| Placeholder         | Replace with                          |
+| ------------------- | ------------------------------------- |
+| `<workspace-id>`    | Log Analytics Workspace ID            |
+| `<subscription-id>` | Your Azure subscription ID            |
+| `<resource-group>`  | Name of your Logic App resource group |
+| `<region>`          | Region (e.g., `eastus`)               |
+| `"you@example.com"` | Recipient email address               |
+
+---
+
+## 🔐 Required API Connections
+
+Make sure these are authorized in your Logic App:
+
+* **Azure Monitor Logs**
+* **Azure Blob Storage**
+* **Office 365 Outlook** (or SMTP, SendGrid)
+
+---
+
+Would you like the same flow exported as a **`.logicapp.json` file** or a **Bicep/ARM deployment template**?
+
+
 Great question 👍. In **Logic Apps**, you have a few ways to display or pass outputs depending on what you want to see:
 
 ---
