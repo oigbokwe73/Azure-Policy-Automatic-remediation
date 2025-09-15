@@ -1,5 +1,171 @@
 # Azure-Policy-Automatic-remediation
 
+
+
+Here is a full **Logic App Designer JSON** that:
+
+✅ Queries Log Analytics
+✅ Transforms result rows into an **object array**
+✅ Converts that object array into **CSV format**
+✅ Emails the CSV as an **attachment**
+
+---
+
+## 🧩 **Logic App Designer JSON – Object Array to CSV Attachment in Email**
+
+```json
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2019-05-01/workflowDefinition.json#",
+    "actions": {
+      "Run_Query_and_List_Results": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/v1/workspaces/<your-workspace-id>/query",
+          "queries": {
+            "query": "Heartbeat | where TimeGenerated > ago(1d) | project TimeGenerated, Computer, OSType"
+          }
+        },
+        "runAfter": {}
+      },
+      "Select_Object_Array": {
+        "type": "Select",
+        "inputs": {
+          "from": "@body('Run_Query_and_List_Results')?['tables']?[0]?['rows']",
+          "select": {
+            "TimeGenerated": "@item()[0]",
+            "Computer": "@item()[1]",
+            "OSType": "@item()[2]"
+          }
+        },
+        "runAfter": {
+          "Run_Query_and_List_Results": ["Succeeded"]
+        }
+      },
+      "Initialize_CSV": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "csvContent",
+              "type": "String",
+              "value": "TimeGenerated,Computer,OSType\n"
+            }
+          ]
+        },
+        "runAfter": {
+          "Select_Object_Array": ["Succeeded"]
+        }
+      },
+      "For_Each_Record": {
+        "type": "Foreach",
+        "foreach": "@outputs('Select_Object_Array')",
+        "actions": {
+          "Append_CSV_Line": {
+            "type": "AppendToStringVariable",
+            "inputs": {
+              "name": "csvContent",
+              "value": "@{items('For_Each_Record')?['TimeGenerated']},@{items('For_Each_Record')?['Computer']},@{items('For_Each_Record')?['OSType']}\n"
+            }
+          }
+        },
+        "runAfter": {
+          "Initialize_CSV": ["Succeeded"]
+        }
+      },
+      "Send_Email_With_CSV_Attachment": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['office365']['connectionId']"
+            }
+          },
+          "method": "post",
+          "path": "/v2/Mail",
+          "body": {
+            "To": ["you@example.com"],
+            "Subject": "Log Analytics CSV Export",
+            "Body": "Please find attached the latest log analytics results in CSV format.",
+            "Attachments": [
+              {
+                "Name": "log-report.csv",
+                "ContentBytes": "@base64(variables('csvContent'))"
+              }
+            ]
+          }
+        },
+        "runAfter": {
+          "For_Each_Record": ["Succeeded"]
+        }
+      }
+    },
+    "triggers": {
+      "manual": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "schema": {}
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {
+    "$connections": {
+      "value": {
+        "azuremonitorlogs": {
+          "connectionId": "/subscriptions/<your-subscription-id>/resourceGroups/<your-resource-group>/providers/Microsoft.Web/connections/azuremonitorlogs",
+          "connectionName": "azuremonitorlogs",
+          "id": "/subscriptions/<your-subscription-id>/providers/Microsoft.Web/locations/<your-region>/managedApis/azuremonitorlogs"
+        },
+        "office365": {
+          "connectionId": "/subscriptions/<your-subscription-id>/resourceGroups/<your-resource-group>/providers/Microsoft.Web/connections/office365",
+          "connectionName": "office365",
+          "id": "/subscriptions/<your-subscription-id>/providers/Microsoft.Web/locations/<your-region>/managedApis/office365"
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## 🔁 Replace the Following
+
+| Placeholder              | Replace With                        |
+| ------------------------ | ----------------------------------- |
+| `<your-workspace-id>`    | Log Analytics Workspace ID          |
+| `<your-subscription-id>` | Your Azure Subscription ID          |
+| `<your-resource-group>`  | The Resource Group of the Logic App |
+| `<your-region>`          | Azure Region (e.g. `eastus`)        |
+| `you@example.com`        | Your destination email address      |
+
+---
+
+## 🧠 Logic App Flow Summary
+
+1. **Trigger**: Manual (can switch to Recurrence)
+2. **Query**: `Heartbeat` table from Log Analytics (customizable)
+3. **Transform**: Raw rows → Object Array using `Select`
+4. **Format CSV**:
+
+   * Initialize CSV string
+   * Loop through array and append lines
+5. **Send Email**: Attach CSV (converted to base64) and send it
+
+---
+
+Would you like me to export this into a downloadable `.json` file for upload, or extend it to **write to Azure Blob Storage** before emailing?
+
+
 Here's a complete **Logic App Designer JSON** definition that:
 
 ✅ Queries **Log Analytics Workspace**
