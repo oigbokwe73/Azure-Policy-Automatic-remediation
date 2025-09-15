@@ -1,16 +1,22 @@
 # Azure-Policy-Automatic-remediation
 
+Here's a complete **Logic App Designer JSON** definition that:
 
-Here's a complete **Logic App Designer JSON definition** that:
-
-1. Runs a **Kusto query** against **Log Analytics**
-2. Converts the results to **CSV**
-3. Stores the CSV in **Azure Blob Storage**
-4. Sends an **email with the CSV attached**
+✅ Queries **Log Analytics Workspace**
+✅ Converts the result into an **object array**
+✅ Outputs that array using a `Select` action (so it can be used as CSV, HTML table, JSON, etc.)
 
 ---
 
-## ✅ Logic App Designer JSON
+## ✅ Use Case
+
+* Run a Kusto Query (e.g., on `Heartbeat`)
+* Convert raw results (`rows`) into structured **object array**
+* Use this object array in downstream actions (email, CSV, blob, etc.)
+
+---
+
+## 🧩 Logic App Designer JSON
 
 ```json
 {
@@ -26,120 +32,44 @@ Here's a complete **Logic App Designer JSON definition** that:
             }
           },
           "method": "get",
-          "path": "/v1/workspaces/<workspace-id>/query",
+          "path": "/v1/workspaces/<your-workspace-id>/query",
           "queries": {
             "query": "Heartbeat | where TimeGenerated > ago(1d) | project TimeGenerated, Computer, OSType"
           }
         },
         "runAfter": {}
       },
-      "Initialize_CSV": {
-        "type": "InitializeVariable",
+      "Select_Object_Array": {
+        "type": "Select",
         "inputs": {
-          "variables": [
-            {
-              "name": "csvOutput",
-              "type": "String",
-              "value": "TimeGenerated,Computer,OSType\n"
-            }
-          ]
+          "from": "@body('Run_Query_and_List_Results')?['tables']?[0]?['rows']",
+          "select": {
+            "TimeGenerated": "@item()[0]",
+            "Computer": "@item()[1]",
+            "OSType": "@item()[2]"
+          }
         },
         "runAfter": {
           "Run_Query_and_List_Results": ["Succeeded"]
         }
       },
-      "For_Each_Row": {
-        "type": "Foreach",
-        "foreach": "@body('Run_Query_and_List_Results')?['tables']?[0]?['rows']",
-        "actions": {
-          "Append_Row_to_CSV": {
-            "type": "AppendToStringVariable",
-            "inputs": {
-              "name": "csvOutput",
-              "value": "@{items('For_Each_Row')[0]},@{items('For_Each_Row')[1]},@{items('For_Each_Row')[2]}\n"
-            },
-            "runAfter": {}
-          }
-        },
+      "Compose_Output_Object_Array": {
+        "type": "Compose",
+        "inputs": "@outputs('Select_Object_Array')",
         "runAfter": {
-          "Initialize_CSV": ["Succeeded"]
-        }
-      },
-      "Create_Blob": {
-        "type": "ApiConnection",
-        "inputs": {
-          "host": {
-            "connection": {
-              "name": "@parameters('$connections')['azureblob']['connectionId']"
-            }
-          },
-          "method": "put",
-          "path": "/v2/datasets/default/files",
-          "queries": {
-            "folderPath": "reports",
-            "name": "report-@{utcNow('yyyy-MM-dd')}.csv"
-          },
-          "body": "@variables('csvOutput')"
-        },
-        "runAfter": {
-          "For_Each_Row": ["Succeeded"]
-        }
-      },
-      "Get_Blob_Content": {
-        "type": "ApiConnection",
-        "inputs": {
-          "host": {
-            "connection": {
-              "name": "@parameters('$connections')['azureblob']['connectionId']"
-            }
-          },
-          "method": "get",
-          "path": "/v2/datasets/default/files/content",
-          "queries": {
-            "path": "reports/report-@{utcNow('yyyy-MM-dd')}.csv"
-          }
-        },
-        "runAfter": {
-          "Create_Blob": ["Succeeded"]
-        }
-      },
-      "Send_Email_with_CSV": {
-        "type": "ApiConnection",
-        "inputs": {
-          "host": {
-            "connection": {
-              "name": "@parameters('$connections')['office365']['connectionId']"
-            }
-          },
-          "method": "post",
-          "path": "/v2/Mail",
-          "body": {
-            "To": ["you@example.com"],
-            "Subject": "Daily Log Analytics Report CSV",
-            "Body": "Attached is the latest report from Log Analytics.",
-            "Attachments": [
-              {
-                "Name": "report.csv",
-                "ContentBytes": "@base64(body('Get_Blob_Content'))"
-              }
-            ]
-          }
-        },
-        "runAfter": {
-          "Get_Blob_Content": ["Succeeded"]
+          "Select_Object_Array": ["Succeeded"]
         }
       }
     },
     "triggers": {
-      "Recurrence": {
-        "type": "Recurrence",
-        "recurrence": {
-          "frequency": "Day",
-          "interval": 1
+      "manual": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "schema": {}
         }
       }
     },
-    "contentVersion": "1.0.0.0",
     "outputs": {}
   },
   "parameters": {
@@ -149,16 +79,6 @@ Here's a complete **Logic App Designer JSON definition** that:
           "connectionId": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Web/connections/azuremonitorlogs",
           "connectionName": "azuremonitorlogs",
           "id": "/subscriptions/<subscription-id>/providers/Microsoft.Web/locations/<region>/managedApis/azuremonitorlogs"
-        },
-        "azureblob": {
-          "connectionId": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Web/connections/azureblob",
-          "connectionName": "azureblob",
-          "id": "/subscriptions/<subscription-id>/providers/Microsoft.Web/locations/<region>/managedApis/azureblob"
-        },
-        "office365": {
-          "connectionId": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Web/connections/office365",
-          "connectionName": "office365",
-          "id": "/subscriptions/<subscription-id>/providers/Microsoft.Web/locations/<region>/managedApis/office365"
         }
       }
     }
@@ -168,34 +88,54 @@ Here's a complete **Logic App Designer JSON definition** that:
 
 ---
 
-## 🛠️ What You Need to Change
+## 🔁 Replace Placeholders
 
-| Placeholder         | Replace with                          |
-| ------------------- | ------------------------------------- |
-| `<workspace-id>`    | Log Analytics Workspace ID            |
-| `<subscription-id>` | Your Azure subscription ID            |
-| `<resource-group>`  | Name of your Logic App resource group |
-| `<region>`          | Region (e.g., `eastus`)               |
-| `"you@example.com"` | Recipient email address               |
-
----
-
-## 🔐 Required API Connections
-
-Make sure these are authorized in your Logic App:
-
-* **Azure Monitor Logs**
-* **Azure Blob Storage**
-* **Office 365 Outlook** (or SMTP, SendGrid)
+| Placeholder           | Replace With                    |
+| --------------------- | ------------------------------- |
+| `<your-workspace-id>` | Your Log Analytics Workspace ID |
+| `<subscription-id>`   | Your Azure subscription         |
+| `<resource-group>`    | Resource group of the Logic App |
+| `<region>`            | Azure region (e.g., `eastus`)   |
 
 ---
 
-Would you like the same flow exported as a **`.logicapp.json` file** or a **Bicep/ARM deployment template**?
+## 🔄 What This Logic App Does
 
-
-Great question 👍. In **Logic Apps**, you have a few ways to display or pass outputs depending on what you want to see:
+1. **Trigger**: Manual (HTTP)
+2. **Action 1**: Run KQL query on Log Analytics
+3. **Action 2**: `Select` rows and convert array to structured JSON
+4. **Action 3**: Output object array in a Compose block
 
 ---
+
+### ✅ Output Sample from Compose Step
+
+```json
+[
+  {
+    "TimeGenerated": "2024-08-01T00:00:00Z",
+    "Computer": "server01",
+    "OSType": "Windows"
+  },
+  {
+    "TimeGenerated": "2024-08-01T01:00:00Z",
+    "Computer": "server02",
+    "OSType": "Linux"
+  }
+]
+```
+
+---
+
+## 📦 Next Step Options
+
+You can now:
+
+* Append this to a CSV in Blob
+* Send via Email
+* Store in Azure SQL or Table Storage
+
+Would you like a full version that exports this object array to **CSV and emails it** as an attachment automatically?
 
 ## 1. **Use a `Response` action (for HTTP-triggered apps)**
 
