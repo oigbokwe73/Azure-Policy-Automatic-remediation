@@ -2,6 +2,106 @@
 
 
 
+
+Here’s a sample **Azure Policy definition** that enforces **Application Gateway to use TLS 1.2 or higher (TLS 1.2, TLS 1.3)** using `DeployIfNotExists`.
+
+This ensures that if an Application Gateway is not configured with at least **TLS 1.2**, the policy will remediate it by updating the SSL policy.
+
+```json
+{
+  "properties": {
+    "displayName": "Enforce TLS 1.2 or higher for Application Gateway",
+    "policyType": "Custom",
+    "mode": "Indexed",
+    "description": "This policy ensures Application Gateways are configured to use TLS 1.2 or higher (TLS 1.2, TLS 1.3).",
+    "metadata": {
+      "version": "1.0.0",
+      "category": "Application Gateway"
+    },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "defaultValue": "DeployIfNotExists",
+        "allowedValues": [
+          "DeployIfNotExists",
+          "AuditIfNotExists",
+          "Disabled"
+        ],
+        "metadata": {
+          "description": "The effect of the policy",
+          "displayName": "Effect"
+        }
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          {
+            "field": "type",
+            "equals": "Microsoft.Network/applicationGateways"
+          },
+          {
+            "anyOf": [
+              {
+                "field": "Microsoft.Network/applicationGateways/sslPolicy.minProtocolVersion",
+                "notEquals": "TLSv1_2"
+              },
+              {
+                "field": "Microsoft.Network/applicationGateways/sslPolicy.minProtocolVersion",
+                "notEquals": "TLSv1_3"
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "effect": "[parameters('effect')]",
+        "details": {
+          "type": "Microsoft.Network/applicationGateways",
+          "roleDefinitionIds": [
+            "/providers/microsoft.authorization/roleDefinitions/fd72cdd0-5f48-46d9-8a4b-33f7cf9df939"  // Contributor role
+          ],
+          "deployment": {
+            "properties": {
+              "mode": "incremental",
+              "template": {
+                "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                "contentVersion": "1.0.0.0",
+                "resources": [
+                  {
+                    "type": "Microsoft.Network/applicationGateways",
+                    "apiVersion": "2022-09-01",
+                    "name": "[field('name')]",
+                    "location": "[field('location')]",
+                    "properties": {
+                      "sslPolicy": {
+                        "policyType": "Predefined",
+                        "policyName": "AppGwSslPolicy20220101"  // supports TLS 1.2+
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### 🔑 Key Points:
+
+* **Condition (`if`)** checks if Application Gateway has `sslPolicy.minProtocolVersion` less than TLS 1.2.
+* **DeployIfNotExists** will update the Application Gateway to use **`AppGwSslPolicy20220101`**, which enforces **TLS 1.2 or higher**.
+* You can change to **`Custom`** if you want to explicitly set **TLS 1.3** when available.
+* The `roleDefinitionIds` allows remediation (Contributor role).
+
+---
+
+👉 Do you want me to also provide a **matching Initiative** (so you can assign this policy easily across multiple subscriptions/management groups), or just the single policy definition is enough?
+
 Here is a full **Logic App Designer JSON** that:
 
 ✅ Queries Log Analytics
