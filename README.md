@@ -1,5 +1,67 @@
 # Azure-Policy-Automatic-remediation
 
+In Excel there isn’t a **CASE** statement like SQL, but you can mimic it with **nested `IF`** or `IFS()`.
+If you want the **VLOOKUP + CASE-like behavior**, here are two approaches:
+
+---
+
+## ✅ Option 1 – Using `IFS()` (modern Excel / Google Sheets)
+
+```excel
+=IFS(
+  ISNUMBER(SEARCH("s", A2)), "AMD",
+  ISNUMBER(SEARCH("v3", A2)), "Intel",
+  ISNUMBER(SEARCH("v4", A2)), "Intel Gen2",
+  ISNUMBER(SEARCH("v5", A2)), "Premium",
+  TRUE, "Other"
+)
+```
+
+* Works like a **CASE WHEN** chain.
+* `SEARCH("s", A2)` = look for substring.
+* First match wins.
+
+---
+
+## ✅ Option 2 – Using Nested `IF()` (older Excel)
+
+```excel
+=IF(ISNUMBER(SEARCH("s", A2)), "AMD",
+   IF(ISNUMBER(SEARCH("v3", A2)), "Intel",
+   IF(ISNUMBER(SEARCH("v4", A2)), "Intel Gen2",
+   IF(ISNUMBER(SEARCH("v5", A2)), "Premium",
+   "Other"))))
+```
+
+This is just a longer CASE emulation.
+
+---
+
+## ✅ Option 3 – Keep VLOOKUP Table (cleaner)
+
+Instead of stacking logic, maintain a **mapping table**:
+
+| Pattern | Family     |
+| ------- | ---------- |
+| `*s*`   | AMD        |
+| `*v3*`  | Intel      |
+| `*v4*`  | Intel Gen2 |
+| `*v5*`  | Premium    |
+| `*`     | Other      |
+
+Then use:
+
+```excel
+=VLOOKUP(A2, $D$2:$E$6, 2, FALSE)
+```
+
+This behaves like a **CASE table**, easier to update without rewriting formulas.
+
+---
+
+👉 Do you want me to build you a **hybrid formula** (one cell, no lookup table) that works like a CASE WHEN + VLOOKUP together (good if you don’t want a helper table)?
+
+
 
 
 
