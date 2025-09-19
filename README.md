@@ -1,4 +1,60 @@
 # Azure-Policy-Automatic-remediation
+Ahh, I see what you’re asking — you want something like a **CASE statement** (like in SQL) but in **Excel**.
+
+Excel doesn’t have a direct `CASE` function, but the equivalent is a **nested `IF`** or using `SWITCH()` (if you’re on Excel 2016+). We can build logic to classify **Azure VM SKUs (Standard\_…) into AMD vs Intel** without needing a separate lookup table.
+
+---
+
+## Option 1 – Using Nested `IF` (CASE equivalent)
+
+```excel
+=IF(ISNUMBER(SEARCH("_s",A2)),"AMD",
+ IF(OR(ISNUMBER(SEARCH("v3",A2)),ISNUMBER(SEARCH("v4",A2))),"Intel",
+ "Other"))
+```
+
+👉 How it works:
+
+* If SKU contains `_s` → `AMD`
+* Else if SKU contains `v3` or `v4` → `Intel`
+* Else → `Other`
+
+---
+
+## Option 2 – Using `SWITCH` (Cleaner, if available)
+
+If you have Excel 2016+ (with `SWITCH`), you can use:
+
+```excel
+=SWITCH(TRUE,
+  ISNUMBER(SEARCH("_s",A2)),"AMD",
+  ISNUMBER(SEARCH("v3",A2)),"Intel",
+  ISNUMBER(SEARCH("v4",A2)),"Intel",
+  "Other")
+```
+
+👉 Here, `TRUE` makes SWITCH behave like a CASE statement:
+
+* First matching condition returns its mapped value.
+* If none match → `"Other"`.
+
+---
+
+## Example
+
+| Column A (SKU)     | Formula Output |
+| ------------------ | -------------- |
+| Standard\_DS3\_v2  | Other          |
+| Standard\_D8s\_v3  | AMD            |
+| Standard\_E16\_v3  | Intel          |
+| Standard\_D32s\_v4 | Intel          |
+| Standard\_F48      | Other          |
+
+---
+
+🔹 If you want to **extend this** (like `v5 = Premium`, `M = Memory Optimized`, etc.), you can keep adding more conditions inside `IF` or `SWITCH`.
+
+Do you want me to **expand this CASE logic to cover *all common Azure VM families*** (B, D, E, F, L, M, NC, ND, etc.) and map them to Intel/AMD automatically?
 
 
 Perfect 👍 you want a **CASE-like formula** in Excel that will return `"AMD"` or `"Intel"` based on the Azure VM family name. Since Excel doesn’t have `CASE`, we emulate it with **`IFS()`** (modern Excel/Google Sheets) or nested `IF()`.
