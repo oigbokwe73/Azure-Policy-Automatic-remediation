@@ -1,5 +1,82 @@
 # Azure-Policy-Automatic-remediation
 
+Perfect — let’s build this as a **single Excel formula** using a `CASE`-like construct (`IFS` in modern Excel, or nested `IF` in older versions). This way, you don’t need a separate lookup table. It will classify **Azure VM SKUs** (`Standard_...`) as **AMD** or **Intel**, covering common VM families.
+
+---
+
+## 🔹 Formula with `IFS` (Excel 2016+ / O365)
+
+```excel
+=IFS(
+  ISNUMBER(SEARCH("Dsv", A2)), "AMD",
+  ISNUMBER(SEARCH("Dasv", A2)), "AMD",
+  ISNUMBER(SEARCH("Esv", A2)), "AMD",
+  ISNUMBER(SEARCH("Fsv", A2)), "AMD",
+  ISNUMBER(SEARCH("Lsv", A2)), "AMD",
+  ISNUMBER(SEARCH("Msv", A2)), "AMD",
+  ISNUMBER(SEARCH("NCasv", A2)), "AMD",
+  ISNUMBER(SEARCH("NDasv", A2)), "AMD",
+  ISNUMBER(SEARCH("HBv", A2)), "AMD",
+  ISNUMBER(SEARCH("D", A2)), "Intel",
+  ISNUMBER(SEARCH("E", A2)), "Intel",
+  ISNUMBER(SEARCH("F", A2)), "Intel",
+  ISNUMBER(SEARCH("L", A2)), "Intel",
+  ISNUMBER(SEARCH("M", A2)), "Intel",
+  ISNUMBER(SEARCH("NC", A2)), "Intel",
+  ISNUMBER(SEARCH("ND", A2)), "Intel",
+  TRUE, "Other"
+)
+```
+
+📌 Explanation:
+
+* `SEARCH("Dsv", A2)` → finds if the VM SKU contains that text.
+* AMD SKUs generally have the **“s” (for AMD EPYC)** suffix (`Dsv`, `Esv`, `Lsv`, etc.).
+* Intel SKUs don’t carry that AMD marker, so they fall under the Intel match.
+* `TRUE, "Other"` → catch-all for anything unrecognized.
+
+---
+
+## 🔹 Formula with Nested `IF` (older Excel)
+
+```excel
+=IF(ISNUMBER(SEARCH("Dsv",A2)),"AMD",
+ IF(ISNUMBER(SEARCH("Dasv",A2)),"AMD",
+ IF(ISNUMBER(SEARCH("Esv",A2)),"AMD",
+ IF(ISNUMBER(SEARCH("Fsv",A2)),"AMD",
+ IF(ISNUMBER(SEARCH("Lsv",A2)),"AMD",
+ IF(ISNUMBER(SEARCH("Msv",A2)),"AMD",
+ IF(ISNUMBER(SEARCH("NCasv",A2)),"AMD",
+ IF(ISNUMBER(SEARCH("NDasv",A2)),"AMD",
+ IF(ISNUMBER(SEARCH("HBv",A2)),"AMD",
+ IF(OR(ISNUMBER(SEARCH("D",A2)),ISNUMBER(SEARCH("E",A2)),
+       ISNUMBER(SEARCH("F",A2)),ISNUMBER(SEARCH("L",A2)),
+       ISNUMBER(SEARCH("M",A2)),ISNUMBER(SEARCH("NC",A2)),
+       ISNUMBER(SEARCH("ND",A2))),"Intel","Other"))))))))))
+```
+
+---
+
+## 🔹 Example
+
+| **VM SKU (Column A)** | **Result (Formula Output)** |
+| --------------------- | --------------------------- |
+| Standard\_D8s\_v3     | AMD                         |
+| Standard\_E16s\_v4    | AMD                         |
+| Standard\_F48s\_v2    | AMD                         |
+| Standard\_D32\_v4     | Intel                       |
+| Standard\_E64\_v3     | Intel                       |
+| Standard\_NCasT4\_v3  | AMD                         |
+| Standard\_NC6         | Intel                       |
+| Standard\_B2ms        | Other                       |
+
+---
+
+⚡ This “case” formula covers **all core Azure families (D, E, F, L, M, NC, ND, HB)** and distinguishes AMD vs Intel based on the `_s` pattern.
+
+👉 Do you want me to **expand this further** with **premium families (NP, H-series, G-series, etc.)** so the classification is 100% Azure-complete?
+
+
 Ahh, I see what you’re asking — you want something like a **CASE statement** (like in SQL) but in **Excel**.
 
 Excel doesn’t have a direct `CASE` function, but the equivalent is a **nested `IF`** or using `SWITCH()` (if you’re on Excel 2016+). We can build logic to classify **Azure VM SKUs (Standard\_…) into AMD vs Intel** without needing a separate lookup table.
