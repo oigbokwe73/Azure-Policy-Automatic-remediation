@@ -1,5 +1,48 @@
 # Azure-Policy-Automatic-remediation
 
+
+Perfect 👍 you want a **CASE-like formula** in Excel that will return `"AMD"` or `"Intel"` based on the Azure VM family name. Since Excel doesn’t have `CASE`, we emulate it with **`IFS()`** (modern Excel/Google Sheets) or nested `IF()`.
+
+Here’s how you can do it:
+
+---
+
+## ✅ Using `IFS()` (cleaner, Excel 2019+ / Google Sheets)
+
+```excel
+=IFS(
+  OR(ISNUMBER(SEARCH("Dasv5", A2)), ISNUMBER(SEARCH("Dadsv5", A2)), ISNUMBER(SEARCH("Dasv6", A2)), ISNUMBER(SEARCH("Dasv7", A2)), ISNUMBER(SEARCH("HB", A2))), "AMD",
+  OR(ISNUMBER(SEARCH("Dsv5", A2)), ISNUMBER(SEARCH("Dv5", A2)), ISNUMBER(SEARCH("M", A2)), ISNUMBER(SEARCH("F", A2)), ISNUMBER(SEARCH("Av2", A2))), "Intel",
+  TRUE, "Other"
+)
+```
+
+---
+
+## ✅ Using Nested `IF()` (works in older Excel)
+
+```excel
+=IF(OR(ISNUMBER(SEARCH("Dasv5", A2)), ISNUMBER(SEARCH("Dadsv5", A2)), ISNUMBER(SEARCH("Dasv6", A2)), ISNUMBER(SEARCH("Dasv7", A2)), ISNUMBER(SEARCH("HB", A2))), "AMD",
+   IF(OR(ISNUMBER(SEARCH("Dsv5", A2)), ISNUMBER(SEARCH("Dv5", A2)), ISNUMBER(SEARCH("M", A2)), ISNUMBER(SEARCH("F", A2)), ISNUMBER(SEARCH("Av2", A2))), "Intel",
+   "Other"))
+```
+
+---
+
+## 🔍 Example
+
+| SKU (A)            | Result (B) |
+| ------------------ | ---------- |
+| Standard\_Dasv5\_8 | AMD        |
+| Standard\_HB120rs  | AMD        |
+| Standard\_D8s\_v5  | Intel      |
+| Standard\_F16s\_v2 | Intel      |
+| Standard\_B2ms     | Other      |
+
+---
+
+👉 Do you want me to **expand this CASE formula** to cover **all known Azure VM families** (B, D, E, F, L, M, NC, ND, HB, etc.) with the right AMD/Intel mapping so you don’t have to maintain it manually?
+
 In Excel there isn’t a **CASE** statement like SQL, but you can mimic it with **nested `IF`** or `IFS()`.
 If you want the **VLOOKUP + CASE-like behavior**, here are two approaches:
 
