@@ -1,5 +1,96 @@
 # Azure-Policy-Automatic-remediation
 
+Here’s a ready-to-use **Azure Policy definition** that will enforce *Azure SQL Auditing* is enabled on your SQL servers.
+
+### Policy Definition – Enable Azure SQL Auditing
+
+```json
+{
+  "properties": {
+    "displayName": "Enable Azure SQL Auditing",
+    "policyType": "BuiltIn",
+    "mode": "All",
+    "description": "This policy ensures that Azure SQL servers have auditing enabled to capture database events for compliance and security purposes.",
+    "metadata": {
+      "category": "SQL"
+    },
+    "parameters": {
+      "retentionDays": {
+        "type": "Integer",
+        "metadata": {
+          "displayName": "Retention days",
+          "description": "Number of days to retain audit logs."
+        },
+        "defaultValue": 90
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          {
+            "field": "type",
+            "equals": "Microsoft.Sql/servers"
+          }
+        ]
+      },
+      "then": {
+        "effect": "DeployIfNotExists",
+        "details": {
+          "type": "Microsoft.Sql/servers/auditingSettings",
+          "name": "default",
+          "existenceCondition": {
+            "field": "Microsoft.Sql/servers/auditingSettings.state",
+            "equals": "Enabled"
+          },
+          "roleDefinitionIds": [
+            "/providers/microsoft.authorization/roleDefinitions/fd902c8b-1a23-4c0f-9e64-b5b2f1b1f4d5" 
+          ],
+          "deployment": {
+            "properties": {
+              "mode": "incremental",
+              "template": {
+                "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                "contentVersion": "1.0.0.0",
+                "resources": [
+                  {
+                    "type": "Microsoft.Sql/servers/auditingSettings",
+                    "apiVersion": "2022-05-01-preview",
+                    "name": "[concat(parameters('serverName'), '/default')]",
+                    "properties": {
+                      "state": "Enabled",
+                      "isAzureMonitorTargetEnabled": true,
+                      "retentionDays": "[parameters('retentionDays')]"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+### How It Works
+
+* **Condition (`if`)**: Applies to all resources of type `Microsoft.Sql/servers`.
+* **Effect (`then`)**:
+
+  * Uses **DeployIfNotExists** to check if auditing is enabled.
+  * If not, it will deploy an `auditingSettings` resource with **state = Enabled**.
+* **RetentionDays parameter**: Defaults to 90, but you can override.
+* **Role Definition**: Requires **SQL Security Manager** role (ID: `fd902c8b-1a23-4c0f-9e64-b5b2f1b1f4d5`) for remediation.
+
+---
+
+✅ With this policy assigned, any SQL server without auditing will automatically have auditing enabled (with logs flowing to Azure Monitor or your configured destination).
+
+Would you like me to also include a **companion initiative** that bundles this with other SQL security policies (like threat detection, TDE, and firewall rules) so you can assign them as one package?
+
 
 
 
