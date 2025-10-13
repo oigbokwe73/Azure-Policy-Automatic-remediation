@@ -1,5 +1,58 @@
 # Azure-Policy-Automatic-remediation
 
+
+Here’s a clear Mermaid **sequence diagram** showing how an Azure Policy remediation runs with a Managed Identity (MI) that has **Contributor** access to enable **Azure SQL auditing**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as Admin / Policy Owner
+    participant AP as Azure Policy (Service)
+    participant PA as Policy Assignment (w/ Managed Identity)
+    participant RBAC as RBAC @ Scope
+    participant PE as Policy Engine (Compliance Eval)
+    participant RT as Remediation Task
+    participant SQL as Azure SQL Server/DB
+    participant SA as Storage/LA (Audit Target)
+
+    Note over Admin,AP: Step 1 — Create/assign policy<br/>Definition: "Enable SQL Auditing on SQL Servers/Databases"<br/>Effect: DeployIfNotExists (or Modify)
+    Admin->>AP: Create Policy Assignment (params: storageAccountId / workspaceId, retentionDays, etc.)
+    AP->>PA: Enable Managed Identity on the Assignment
+
+    Note over Admin,RBAC: Step 2 — Grant MI permissions
+    Admin->>RBAC: Assign **Contributor** to PA’s MI at target scope (sub/RG)
+    Note over RBAC,PA: (Optional but common) If auditing to Blob<br/>add **Storage Blob Data Contributor** on the Storage Account
+
+    Note over PE,SQL: Step 3 — Continuous compliance evaluation
+    PE->>SQL: Evaluate: Is auditing enabled to the target (Blob/LA)?
+    SQL-->>PE: Non-compliant resources identified
+
+    Note over Admin,AP: Step 4 — Start remediation
+    Admin->>AP: Trigger **Remediation Task** for this assignment
+    AP->>RT: Create remediation job using PA’s MI
+
+    Note over RT,SQL: Step 5 — Deployment to fix drift
+    RT->>SQL: PUT auditingSettings (State=Enabled, Target=SA/Workspace, RetentionDays)
+    alt Auditing target = Storage Account
+        RT->>SA: Validate/Write to Blob endpoint (uses MI permissions)
+    else Auditing target = Log Analytics
+        RT->>SA: Connect to LA Workspace (uses MI permissions)
+    end
+    SQL-->>RT: Success / provisioningState: Succeeded
+
+    Note over AP,Admin: Step 6 — Compliance updated
+    RT-->>AP: Remediation results
+    AP-->>Admin: Resource marked **Compliant** in Policy compliance view
+```
+
+**Notes**
+
+* The **Managed Identity on the policy assignment** is what performs the fix. Giving it **Contributor** at the remediation scope is sufficient for most deploy actions.
+* If auditing targets a **Storage Account (Blob)**, also grant that MI **Storage Blob Data Contributor** on the Storage Account (data-plane write).
+* Use the built-in definitions like *“Configure SQL servers to have auditing enabled”* and *“Configure Azure SQL databases to have auditing enabled”* with **DeployIfNotExists**.
+* Typical parameters: `storageAccountId` **or** `logAnalyticsDestinationType/workspaceId`, plus `retentionDays`.
+
+
 Here’s a ready-to-use **Azure Policy definition** that will enforce *Azure SQL Auditing* is enabled on your SQL servers.
 
 ### Policy Definition – Enable Azure SQL Auditing
