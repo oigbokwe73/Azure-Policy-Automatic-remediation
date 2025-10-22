@@ -1,6 +1,149 @@
 # Azure-Policy-Automatic-remediation
 
 
+Here’s a complete **Azure Policy** definition that ensures **Application Gateway** resources have **diagnostic settings** configured to send both **ApplicationGatewayAccessLog** and **ApplicationGatewayFirewallLog** categories to a specified **Log Analytics workspace**.
+
+---
+
+### ✅ **Policy Definition – Enable Diagnostic Logs for Application Gateway**
+
+```json
+{
+  "properties": {
+    "displayName": "Configure Application Gateway to send logs to Log Analytics workspace",
+    "policyType": "Custom",
+    "mode": "Indexed",
+    "description": "This policy ensures Application Gateways send Application Gateway Access Logs and Application Gateway Firewall Logs to a designated Log Analytics workspace.",
+    "metadata": {
+      "category": "Network",
+      "version": "1.0.0"
+    },
+    "parameters": {
+      "logAnalytics": {
+        "type": "String",
+        "metadata": {
+          "displayName": "Log Analytics Workspace Resource ID",
+          "description": "The resource ID of the Log Analytics workspace to which logs should be sent."
+        }
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          {
+            "field": "type",
+            "equals": "Microsoft.Network/applicationGateways"
+          },
+          {
+            "count": {
+              "field": "Microsoft.Insights/diagnosticSettings",
+              "where": {
+                "allOf": [
+                  {
+                    "field": "Microsoft.Insights/diagnosticSettings/logs[*].category",
+                    "in": [
+                      "ApplicationGatewayAccessLog",
+                      "ApplicationGatewayFirewallLog"
+                    ]
+                  },
+                  {
+                    "field": "Microsoft.Insights/diagnosticSettings/workspaceId",
+                    "equals": "[parameters('logAnalytics')]"
+                  }
+                ]
+              }
+            },
+            "equals": 0
+          }
+        ]
+      },
+      "then": {
+        "effect": "DeployIfNotExists",
+        "details": {
+          "type": "Microsoft.Insights/diagnosticSettings",
+          "roleDefinitionIds": [
+            "/providers/microsoft.authorization/roleDefinitions/ed4319e3-7b33-4e71-9c1a-b3ef51cabe04"  // Monitoring Contributor
+          ],
+          "deployment": {
+            "properties": {
+              "mode": "incremental",
+              "template": {
+                "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                "contentVersion": "1.0.0.0",
+                "resources": [
+                  {
+                    "type": "Microsoft.Insights/diagnosticSettings",
+                    "apiVersion": "2021-05-01-preview",
+                    "name": "set-by-policy",
+                    "properties": {
+                      "workspaceId": "[parameters('logAnalytics')]",
+                      "logs": [
+                        {
+                          "category": "ApplicationGatewayAccessLog",
+                          "enabled": true
+                        },
+                        {
+                          "category": "ApplicationGatewayPerformanceLog",
+                          "enabled": true
+                        },
+                        {
+                          "category": "ApplicationGatewayFirewallLog",
+                          "enabled": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+### 🧩 **How It Works**
+
+| Section                      | Description                                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **If Condition**             | Checks if an Application Gateway exists without diagnostic settings sending logs to the specified workspace.       |
+| **Then (DeployIfNotExists)** | Automatically deploys diagnostic settings to send logs to Log Analytics.                                           |
+| **Log Categories**           | `ApplicationGatewayAccessLog`, `ApplicationGatewayPerformanceLog`, `ApplicationGatewayFirewallLog`.                |
+| **Effect**                   | Enforces via `DeployIfNotExists` — auto-remediates non-compliant resources.                                        |
+| **Role Requirement**         | The managed identity assigned for remediation needs **Monitoring Contributor** on the target Application Gateways. |
+
+---
+
+### ⚙️ **Parameter Example (Assignment Scope)**
+
+```json
+{
+  "parameters": {
+    "logAnalytics": {
+      "value": "/subscriptions/<subscription-id>/resourceGroups/<rg-name>/providers/Microsoft.OperationalInsights/workspaces/<workspace-name>"
+    }
+  }
+}
+```
+
+---
+
+### 🧠 **Best Practice Tips**
+
+* Assign this policy at **subscription** or **management group** scope.
+* Ensure your **policy assignment** includes a **managed identity** with `Monitoring Contributor` rights.
+* Include this in your **Azure Policy Initiative** for “Network Monitoring Standards”.
+
+---
+
+Would you like me to add a **remediation task diagram (Mermaid)** showing the sequence (Policy → MI → ARM → DiagnosticSettings)?
+
+
+
 Here’s a clear Mermaid **sequence diagram** showing how an Azure Policy remediation runs with a Managed Identity (MI) that has **Contributor** access to enable **Azure SQL auditing**:
 
 ```mermaid
