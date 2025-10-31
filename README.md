@@ -1,5 +1,5 @@
 Here’s a clean and professional example showing **Azure Subscription**, **Resource/Resource Group**, **Role Assignments**, and **Identity Types (Managed Identity, Service Principal, or Static Group)** — formatted in a clear bulleted layout:
-
+https://learn.microsoft.com/en-us/azure/virtual-machines/shared-image-galleries?tabs=vmsource%2Cazure-cli
 ---
 
 ### 🌐 **Azure Role Assignment Example**
