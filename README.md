@@ -1,3 +1,54 @@
+Here’s a clean and professional example showing **Azure Subscription**, **Resource/Resource Group**, **Role Assignments**, and **Identity Types (Managed Identity, Service Principal, or Static Group)** — formatted in a clear bulleted layout:
+
+---
+
+### 🌐 **Azure Role Assignment Example**
+
+* **Subscription Name:**
+  `Production-Enterprise-Apps-Sub01`
+
+* **Resource Group:**
+  `rg-data-ingestion-prod`
+
+* **Resource:**
+  `azfunc-data-ingest-funcapp`
+
+* **Role Assignments:**
+
+  * **Contributor** → `mi-funcapp-dataingest` *(Managed Identity)*
+  * **Storage Blob Data Contributor** → `spn-adls-ingest-writer` *(Service Principal)*
+  * **Reader** → `grp-dataops-observers` *(Static AD Group)*
+  * **Key Vault Secrets User** → `mi-funcapp-dataingest` *(Managed Identity)*
+  * **SQL DB Contributor** → `spn-sqlaccess-datawriter` *(Service Principal)*
+
+---
+
+### 🧩 **Additional Example**
+
+* **Subscription Name:**
+  `Dev-Test-Analytics-Sub02`
+
+* **Resource Group:**
+  `rg-analytics-dev`
+
+* **Resources:**
+
+  * `synapse-workspace-dev`
+  * `datalake-analytics-dev`
+  * `keyvault-analytics-dev`
+
+* **Role Assignments:**
+
+  * **Synapse Administrator** → `grp-analytics-admins` *(Static Group)*
+  * **Storage Blob Data Reader** → `mi-logicapp-analytics` *(Managed Identity)*
+  * **Key Vault Secrets Officer** → `spn-automation-ci-cd` *(Service Principal)*
+
+---
+
+Would you like me to present this as a **table format (Markdown or CSV)** for easier import into Excel or Azure documentation?
+
+
+
 # Azure-Policy-Automatic-remediation
 
 
